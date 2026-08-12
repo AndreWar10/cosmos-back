@@ -4,6 +4,7 @@ import type {
   GetArticlesParams,
   NewsRepository,
 } from '../../domain/repositories/NewsRepository.js';
+import { CACHE_TTL, upstreamCache } from '../../shared/cache/MemoryCache.js';
 import { httpGet } from '../../shared/http/httpClient.js';
 
 interface SpaceflightAuthorRaw {
@@ -47,22 +48,33 @@ function mapArticle(raw: SpaceflightArticleRaw): Article {
 
 export class SpaceflightNewsRepository implements NewsRepository {
   async getArticles(params: GetArticlesParams = {}): Promise<ArticleList> {
-    const raw = await httpGet<SpaceflightArticlesResponse>(
-      externalApis.spaceflightNews,
-      {
-        query: {
-          limit: params.limit ?? 10,
-          offset: params.offset ?? 0,
-          search: params.search,
-        },
-      },
-    );
+    const limit = params.limit ?? 10;
+    const offset = params.offset ?? 0;
+    const search = params.search?.trim() || '';
+    const cacheKey = `news:limit=${limit}:offset=${offset}:search=${search}`;
 
-    return {
-      count: raw.count,
-      next: raw.next,
-      previous: raw.previous,
-      results: raw.results.map(mapArticle),
-    };
+    return upstreamCache.getOrSet(
+      cacheKey,
+      async () => {
+        const raw = await httpGet<SpaceflightArticlesResponse>(
+          externalApis.spaceflightNews,
+          {
+            query: {
+              limit,
+              offset,
+              search: search || undefined,
+            },
+          },
+        );
+
+        return {
+          count: raw.count,
+          next: raw.next,
+          previous: raw.previous,
+          results: raw.results.map(mapArticle),
+        };
+      },
+      CACHE_TTL.news,
+    );
   }
 }

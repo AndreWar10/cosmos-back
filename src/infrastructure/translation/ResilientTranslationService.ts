@@ -3,7 +3,7 @@ import { externalApis } from '../../config/env.js';
 import type { TranslationService } from '../../domain/services/TranslationService.js';
 import type { Locale } from '../../shared/types/locale.js';
 import { httpGet } from '../../shared/http/httpClient.js';
-import { upstreamCache } from '../../shared/cache/MemoryCache.js';
+import { CACHE_TTL, upstreamCache } from '../../shared/cache/MemoryCache.js';
 
 interface MyMemoryResponse {
   responseData?: {
@@ -90,7 +90,7 @@ export class ResilientTranslationService implements TranslationService {
           }
         }
       },
-      60 * 60_000,
+      CACHE_TTL.translation,
     );
   }
 

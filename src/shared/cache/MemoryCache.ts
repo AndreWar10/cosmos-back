@@ -11,12 +11,14 @@ export class MemoryCache {
   get<T>(key: string): T | undefined {
     const entry = this.store.get(key);
     if (!entry) return undefined;
+    if (Date.now() > entry.expiresAt) return undefined;
+    return entry.value as T;
+  }
 
-    if (Date.now() > entry.expiresAt) {
-      this.store.delete(key);
-      return undefined;
-    }
-
+  /** Returns value even if expired (for stale-on-error fallback). */
+  getStale<T>(key: string): T | undefined {
+    const entry = this.store.get(key);
+    if (!entry) return undefined;
     return entry.value as T;
   }
 
@@ -35,11 +37,30 @@ export class MemoryCache {
     const cached = this.get<T>(key);
     if (cached !== undefined) return cached;
 
-    const value = await factory();
-    this.set(key, value, ttlMs);
-    return value;
+    try {
+      const value = await factory();
+      this.set(key, value, ttlMs);
+      return value;
+    } catch (error) {
+      const stale = this.getStale<T>(key);
+      if (stale !== undefined) {
+        console.warn(
+          `[cache] upstream failed for "${key}", serving stale cache`,
+        );
+        return stale;
+      }
+      throw error;
+    }
   }
 }
 
-/** Shared short-lived cache for upstream API responses (helps with DEMO_KEY limits). */
+/** Shared cache for upstream API responses. */
 export const upstreamCache = new MemoryCache(5 * 60_000);
+
+export const CACHE_TTL = {
+  apod: 30 * 60_000,
+  neo: 10 * 60_000,
+  news: 5 * 60_000,
+  launches: 10 * 60_000,
+  translation: 60 * 60_000,
+} as const;

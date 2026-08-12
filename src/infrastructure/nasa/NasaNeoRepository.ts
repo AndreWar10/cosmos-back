@@ -7,7 +7,7 @@ import type {
   GetNeoFeedParams,
   NeoRepository,
 } from '../../domain/repositories/NeoRepository.js';
-import { upstreamCache } from '../../shared/cache/MemoryCache.js';
+import { CACHE_TTL, upstreamCache } from '../../shared/cache/MemoryCache.js';
 import { httpGet } from '../../shared/http/httpClient.js';
 
 interface NasaNeoRaw {
@@ -77,7 +77,9 @@ export class NasaNeoRepository implements NeoRepository {
     const endDate = params.endDate ?? startDate;
     const cacheKey = `neo:${startDate}:${endDate}`;
 
-    return upstreamCache.getOrSet(cacheKey, async () => {
+    return upstreamCache.getOrSet(
+      cacheKey,
+      async () => {
       const raw = await httpGet<NasaNeoFeedResponse>(externalApis.nasaNeo, {
         query: {
           api_key: env.NASA_API_KEY,
@@ -98,6 +100,8 @@ export class NasaNeoRepository implements NeoRepository {
         endDate,
         objectsByDate,
       };
-    });
+    },
+      CACHE_TTL.neo,
+    );
   }
 }

@@ -6,6 +6,7 @@ import type {
   LaunchesRepository,
 } from '../../domain/repositories/LaunchesRepository.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
+import { CACHE_TTL, upstreamCache } from '../../shared/cache/MemoryCache.js';
 import { httpGet } from '../../shared/http/httpClient.js';
 
 /**
@@ -113,34 +114,51 @@ async function fetchSpaceXLaunches(options: {
 }): Promise<LaunchList> {
   const limit = options.limit;
   const offset = options.offset ?? 0;
+  const cacheKey = [
+    'launches',
+    options.path ?? 'all',
+    `limit=${limit}`,
+    `offset=${offset}`,
+    options.onlyFuture ? 'future' : 'any',
+    options.status ?? 'any-status',
+  ].join(':');
 
-  const query: Record<string, string | number | boolean | undefined> = {
-    lsp__id: SPACEX_PROVIDER_ID,
-    limit,
-    offset,
-    mode: 'detailed',
-  };
+  return upstreamCache.getOrSet(
+    cacheKey,
+    async () => {
+      const query: Record<string, string | number | boolean | undefined> = {
+        lsp__id: SPACEX_PROVIDER_ID,
+        limit,
+        offset,
+        mode: 'detailed',
+      };
 
-  if (options.status) {
-    query.status__ids = STATUS_IDS[options.status];
-  }
+      if (options.status) {
+        query.status__ids = STATUS_IDS[options.status];
+      }
 
-  if (options.onlyFuture) {
-    query.net__gte = new Date().toISOString();
-  }
+      if (options.onlyFuture) {
+        // Stable to the minute so cache keys stay useful within the TTL window.
+        const now = new Date();
+        now.setSeconds(0, 0);
+        query.net__gte = now.toISOString();
+      }
 
-  const basePath = options.path
-    ? `${externalApis.launchLibrary}/${options.path}/`
-    : `${externalApis.launchLibrary}/`;
+      const basePath = options.path
+        ? `${externalApis.launchLibrary}/${options.path}/`
+        : `${externalApis.launchLibrary}/`;
 
-  const raw = await httpGet<LaunchLibraryResponse>(basePath, { query });
+      const raw = await httpGet<LaunchLibraryResponse>(basePath, { query });
 
-  return {
-    count: raw.count,
-    limit,
-    offset,
-    results: raw.results.map(mapLaunch),
-  };
+      return {
+        count: raw.count,
+        limit,
+        offset,
+        results: raw.results.map(mapLaunch),
+      };
+    },
+    CACHE_TTL.launches,
+  );
 }
 
 export class SpaceXLaunchesRepository implements LaunchesRepository {

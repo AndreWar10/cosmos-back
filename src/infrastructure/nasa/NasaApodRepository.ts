@@ -4,7 +4,7 @@ import type {
   ApodRepository,
   GetApodParams,
 } from '../../domain/repositories/ApodRepository.js';
-import { upstreamCache } from '../../shared/cache/MemoryCache.js';
+import { CACHE_TTL, upstreamCache } from '../../shared/cache/MemoryCache.js';
 import { httpGet } from '../../shared/http/httpClient.js';
 
 interface NasaApodResponse {
@@ -35,7 +35,9 @@ export class NasaApodRepository implements ApodRepository {
   async getApod(params: GetApodParams = {}): Promise<Apod> {
     const cacheKey = `apod:${params.date ?? 'today'}`;
 
-    return upstreamCache.getOrSet(cacheKey, async () => {
+    return upstreamCache.getOrSet(
+      cacheKey,
+      async () => {
       const raw = await httpGet<NasaApodResponse>(externalApis.nasaApod, {
         query: {
           api_key: env.NASA_API_KEY,
@@ -44,6 +46,8 @@ export class NasaApodRepository implements ApodRepository {
       });
 
       return mapApod(raw);
-    });
+    },
+      CACHE_TTL.apod,
+    );
   }
 }
