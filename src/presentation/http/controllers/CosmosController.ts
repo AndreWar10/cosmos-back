@@ -56,6 +56,7 @@ export class CosmosController {
         locale: req.locale,
         mode,
         limit: Number(req.query.limit),
+        offset: Number(req.query.offset),
       });
 
       res.json({

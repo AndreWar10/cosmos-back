@@ -195,32 +195,41 @@ GET /api/pt/news?limit=5
 Lançamentos SpaceX (via Launch Library 2).  
 Em `/pt`, traduz `name` e `details`.
 
-**Sem filtros** (`status`, `upcoming`, `offset` foram removidos) — a lista master é cacheada e reutilizada, pra não estourar o rate limit (15 req/hora).
+Paginação simples (`limit` + `offset`). Sem filtros de status/upcoming.
 
 ### Query params
 
 | Param | Tipo | Obrigatório | Default | Descrição |
 |-------|------|-------------|---------|-----------|
 | `mode` | `list` \| `latest` \| `next` | não | `list` | Tipo de consulta |
-| `limit` | `number` (1–100) | não | `20` | Qtd. de itens (`mode=list`) |
+| `limit` | `number` (1–100) | não | `20` | Itens por página |
+| `offset` | `number` (≥ 0) | não | `0` | Deslocamento |
 
 ### Modos
 
 | `mode` | Retorno |
 |--------|---------|
-| `list` | Lista `{ count, limit, offset, results }` (do cache) |
+| `list` | Lista paginada `{ count, limit, offset, results }` |
 | `latest` | Último lançamento (objeto) |
 | `next` | Próximo lançamento futuro (objeto) |
 
 ### Exemplos
 
 ```http
-GET /api/launches
-GET /api/launches?limit=10
+GET /api/launches?limit=20&offset=0
+GET /api/launches?limit=20&offset=20
+GET /api/launches?limit=20&offset=40
 GET /api/launches?mode=next
 GET /api/launches?mode=latest
-GET /api/pt/launches?mode=next
+GET /api/pt/launches?limit=20&offset=0
 ```
+
+### Infinite scroll (app)
+
+1. `offset=0&limit=20`
+2. ao scrollar: `offset=20&limit=20`
+3. depois: `offset=40&limit=20`
+4. parar quando `results.length < limit` ou `offset + results.length >= count`
 
 ### Resposta `200` (`mode=list`)
 
@@ -228,50 +237,13 @@ GET /api/pt/launches?mode=next
 {
   "locale": "en",
   "data": {
-    "count": 60,
+    "count": 715,
     "limit": 20,
     "offset": 0,
-    "results": [
-      {
-        "id": "36ab6924-...",
-        "name": "Falcon 9 Block 5 | Starlink Group 10-19",
-        "flightNumber": 715,
-        "dateUtc": "2026-08-15T21:52:00Z",
-        "dateUnix": 1786825920,
-        "success": true,
-        "upcoming": false,
-        "status": "Success",
-        "details": "...",
-        "rocket": "Falcon 9 Block 5",
-        "launchpad": "Space Launch Complex 40",
-        "links": {
-          "patch": { "small": "...", "large": "..." },
-          "webcast": null,
-          "wikipedia": "...",
-          "article": "...",
-          "flickr": { "original": [] }
-        },
-        "cores": []
-      }
-    ]
+    "results": [ /* ... */ ]
   }
 }
 ```
-
-Com `mode=next` ou `mode=latest`, `data` é um **objeto**.
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `count` | `number` | Total no cache master |
-| `limit` | `number` | Limite pedido |
-| `results[].id` | `string` | ID do lançamento |
-| `results[].name` | `string` | Nome da missão |
-| `results[].success` | `boolean \| null` | Sucesso |
-| `results[].upcoming` | `boolean` | Ainda não ocorreu |
-| `results[].status` | `string` | Status (`Success`, `Failure`, `Go`...) |
-| `results[].details` | `string \| null` | Descrição |
-| `results[].rocket` | `string` | Foguete |
-| `results[].launchpad` | `string` | Plataforma |
 
 ---
 

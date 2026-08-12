@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { env, externalApis } from '../../config/env.js';
 import type { Launch, LaunchList } from '../../domain/entities/Launch.js';
 import type {
@@ -8,15 +7,12 @@ import type {
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import { CACHE_TTL, upstreamCache } from '../../shared/cache/MemoryCache.js';
 import { httpGet } from '../../shared/http/httpClient.js';
-import fs from 'node:fs';
 
 /**
- * No query filters — one master list is cached and sliced locally.
- * Launch Library free tier is 15 req/hour; filters were burning the quota.
+ * SpaceX launches via Launch Library 2.
+ * Pagination only (limit + offset) — no status/upcoming filters.
  */
 const SPACEX_PROVIDER_ID = 121;
-const MASTER_KEY = 'launches:master';
-const SEED_PATH = path.resolve(process.cwd(), 'data', 'launches-seed.json');
 
 interface LaunchLibraryLaunch {
   id: string;
@@ -32,12 +28,10 @@ interface LaunchLibraryLaunch {
 }
 
 interface LaunchLibraryResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
   results: LaunchLibraryLaunch[];
-}
-
-interface MasterSnapshot {
-  updatedAt: string;
-  results: Launch[];
 }
 
 function isSuccessful(statusId: number): boolean | null {
@@ -82,138 +76,89 @@ function authHeaders(): Record<string, string> | undefined {
     : undefined;
 }
 
-function loadSeed(): MasterSnapshot | undefined {
-  try {
-    if (!fs.existsSync(SEED_PATH)) return undefined;
-    return JSON.parse(fs.readFileSync(SEED_PATH, 'utf8')) as MasterSnapshot;
-  } catch {
-    return undefined;
-  }
-}
-
-function mergeLaunches(...groups: Launch[][]): Launch[] {
-  const seen = new Set<string>();
-  const merged: Launch[] = [];
-  for (const group of groups) {
-    for (const launch of group) {
-      if (seen.has(launch.id)) continue;
-      seen.add(launch.id);
-      merged.push(launch);
-    }
-  }
-  return merged.sort((a, b) => b.dateUnix - a.dateUnix);
-}
-
-async function fetchPage(
-  pathName: 'upcoming' | 'previous',
-  limit: number,
-): Promise<Launch[]> {
-  const raw = await httpGet<LaunchLibraryResponse>(
-    `${externalApis.launchLibrary}/${pathName}/`,
-    {
-      query: {
-        lsp__id: SPACEX_PROVIDER_ID,
-        limit,
-        mode: 'detailed',
-      },
-      headers: authHeaders(),
-    },
-  );
-  return raw.results.map(mapLaunch);
-}
-
-async function refreshMasterFromUpstream(): Promise<MasterSnapshot> {
-  const [upcoming, previous] = await Promise.all([
-    fetchPage('upcoming', 20),
-    fetchPage('previous', 40),
-  ]);
-
-  const snapshot: MasterSnapshot = {
-    updatedAt: new Date().toISOString(),
-    results: mergeLaunches(upcoming, previous),
-  };
-
-  upstreamCache.set(MASTER_KEY, snapshot, CACHE_TTL.launches);
-  return snapshot;
-}
-
-async function getMaster(): Promise<Launch[]> {
-  const memory = upstreamCache.getStale<MasterSnapshot>(MASTER_KEY);
-  if (memory) {
-    const fresh = upstreamCache.get<MasterSnapshot>(MASTER_KEY);
-    if (!fresh) {
-      void refreshMasterFromUpstream().catch((error) => {
-        console.warn(
-          '[launches] background refresh failed:',
-          error instanceof Error ? error.message : error,
-        );
-      });
-    }
-    return memory.results;
-  }
-
-  const seed = loadSeed();
-  if (seed) {
-    upstreamCache.set(MASTER_KEY, seed, CACHE_TTL.launches);
-    void refreshMasterFromUpstream().catch((error) => {
-      console.warn(
-        '[launches] background refresh failed:',
-        error instanceof Error ? error.message : error,
-      );
-    });
-    return seed.results;
-  }
-
-  try {
-    const snapshot = await refreshMasterFromUpstream();
-    return snapshot.results;
-  } catch (error) {
-    throw error;
-  }
-}
-
 export class SpaceXLaunchesRepository implements LaunchesRepository {
   async getLaunches(params: GetLaunchesParams = {}): Promise<LaunchList> {
     const limit = params.limit ?? 20;
-    const launches = await getMaster();
+    const offset = params.offset ?? 0;
+    const cacheKey = `launches:list:limit=${limit}:offset=${offset}`;
 
-    return {
-      count: launches.length,
-      limit,
-      offset: 0,
-      results: launches.slice(0, limit),
-    };
+    return upstreamCache.getStaleWhileRevalidate(
+      cacheKey,
+      async () => {
+        const raw = await httpGet<LaunchLibraryResponse>(
+          `${externalApis.launchLibrary}/`,
+          {
+            query: {
+              lsp__id: SPACEX_PROVIDER_ID,
+              limit,
+              offset,
+              mode: 'detailed',
+              ordering: '-net',
+            },
+            headers: authHeaders(),
+          },
+        );
+
+        return {
+          count: raw.count,
+          limit,
+          offset,
+          results: raw.results.map(mapLaunch),
+        };
+      },
+      CACHE_TTL.launches,
+    );
   }
 
   async getLatestLaunch(): Promise<Launch> {
-    const launches = await getMaster();
-    const latest = launches.find((launch) => !launch.upcoming);
-    if (!latest) throw new NotFoundError('Latest SpaceX launch not found');
-    return latest;
+    const cacheKey = 'launches:latest';
+
+    return upstreamCache.getStaleWhileRevalidate(
+      cacheKey,
+      async () => {
+        const raw = await httpGet<LaunchLibraryResponse>(
+          `${externalApis.launchLibrary}/previous/`,
+          {
+            query: {
+              lsp__id: SPACEX_PROVIDER_ID,
+              limit: 1,
+              mode: 'detailed',
+            },
+            headers: authHeaders(),
+          },
+        );
+
+        const latest = raw.results[0];
+        if (!latest) throw new NotFoundError('Latest SpaceX launch not found');
+        return mapLaunch(latest);
+      },
+      CACHE_TTL.launches,
+    );
   }
 
   async getNextLaunch(): Promise<Launch> {
-    const launches = await getMaster();
-    const next = launches
-      .filter((launch) => launch.upcoming)
-      .sort((a, b) => a.dateUnix - b.dateUnix)[0];
-    if (!next) throw new NotFoundError('Next SpaceX launch not found');
-    return next;
-  }
+    const cacheKey = 'launches:next';
 
-  async refreshMaster(): Promise<void> {
-    try {
-      await refreshMasterFromUpstream();
-      console.log('[launches] master cache refreshed');
-    } catch (error) {
-      const seed = loadSeed();
-      if (seed && !upstreamCache.getStale(MASTER_KEY)) {
-        upstreamCache.set(MASTER_KEY, seed, CACHE_TTL.launches);
-      }
-      console.warn(
-        '[launches] refresh skipped:',
-        error instanceof Error ? error.message : error,
-      );
-    }
+    return upstreamCache.getStaleWhileRevalidate(
+      cacheKey,
+      async () => {
+        const raw = await httpGet<LaunchLibraryResponse>(
+          `${externalApis.launchLibrary}/upcoming/`,
+          {
+            query: {
+              lsp__id: SPACEX_PROVIDER_ID,
+              limit: 1,
+              mode: 'detailed',
+            },
+            headers: authHeaders(),
+          },
+        );
+
+        const next = raw.results[0];
+        if (!next) throw new NotFoundError('Next SpaceX launch not found');
+        return mapLaunch(next);
+      },
+      CACHE_TTL.launches,
+    );
   }
 }
