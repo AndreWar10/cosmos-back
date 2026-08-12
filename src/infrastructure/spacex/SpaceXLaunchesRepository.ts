@@ -1,4 +1,4 @@
-import { externalApis } from '../../config/env.js';
+import { env, externalApis } from '../../config/env.js';
 import type { Launch, LaunchList } from '../../domain/entities/Launch.js';
 import type {
   GetLaunchesParams,
@@ -148,7 +148,12 @@ async function fetchSpaceXLaunches(options: {
         ? `${externalApis.launchLibrary}/${options.path}/`
         : `${externalApis.launchLibrary}/`;
 
-      const raw = await httpGet<LaunchLibraryResponse>(basePath, { query });
+      const raw = await httpGet<LaunchLibraryResponse>(basePath, {
+        query,
+        headers: env.LAUNCH_LIBRARY_TOKEN
+          ? { Authorization: `Token ${env.LAUNCH_LIBRARY_TOKEN}` }
+          : undefined,
+      });
 
       return {
         count: raw.count,

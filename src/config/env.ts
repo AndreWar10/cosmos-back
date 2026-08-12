@@ -5,6 +5,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3333),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   NASA_API_KEY: z.string().min(1).default('DEMO_KEY'),
+  /** Optional The Space Devs token — raises Launch Library rate limits. */
+  LAUNCH_LIBRARY_TOKEN: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),
 });
 
