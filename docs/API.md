@@ -195,26 +195,20 @@ GET /api/pt/news?limit=5
 Lançamentos SpaceX (via Launch Library 2).  
 Em `/pt`, traduz `name` e `details`.
 
+**Sem filtros** (`status`, `upcoming`, `offset` foram removidos) — a lista master é cacheada e reutilizada, pra não estourar o rate limit (15 req/hora).
+
 ### Query params
 
 | Param | Tipo | Obrigatório | Default | Descrição |
 |-------|------|-------------|---------|-----------|
 | `mode` | `list` \| `latest` \| `next` | não | `list` | Tipo de consulta |
-| `limit` | `number` (1–100) | não | `20` | Qtd. por página (`mode=list`) |
-| `offset` | `number` (≥ 0) | não | `0` | Paginação (`mode=list`) |
-| `upcoming` | `true` \| `false` | não | — | Futuros / passados (`mode=list`) |
-| `status` | `success` \| `failure` \| `partial_failure` | não | — | Resultado do lançamento (`mode=list`) |
-
-`status` mapeia a API da Launch Library:
-- `success` → status id `3`
-- `failure` → status id `4`
-- `partial_failure` → status id `7`
+| `limit` | `number` (1–100) | não | `20` | Qtd. de itens (`mode=list`) |
 
 ### Modos
 
 | `mode` | Retorno |
 |--------|---------|
-| `list` | Lista paginada `{ count, limit, offset, results }` |
+| `list` | Lista `{ count, limit, offset, results }` (do cache) |
 | `latest` | Último lançamento (objeto) |
 | `next` | Próximo lançamento futuro (objeto) |
 
@@ -222,10 +216,7 @@ Em `/pt`, traduz `name` e `details`.
 
 ```http
 GET /api/launches
-GET /api/launches?limit=10&offset=20
-GET /api/launches?upcoming=true
-GET /api/launches?upcoming=false&status=success&limit=20
-GET /api/launches?status=failure&offset=0
+GET /api/launches?limit=10
 GET /api/launches?mode=next
 GET /api/launches?mode=latest
 GET /api/pt/launches?mode=next
@@ -237,7 +228,7 @@ GET /api/pt/launches?mode=next
 {
   "locale": "en",
   "data": {
-    "count": 715,
+    "count": 60,
     "limit": 20,
     "offset": 0,
     "results": [
@@ -267,24 +258,20 @@ GET /api/pt/launches?mode=next
 }
 ```
 
-Com `mode=next` ou `mode=latest`, `data` é um **objeto** (não lista paginada).
+Com `mode=next` ou `mode=latest`, `data` é um **objeto**.
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| `count` | `number` | Total de itens (paginação) |
-| `limit` / `offset` | `number` | Página atual |
+| `count` | `number` | Total no cache master |
+| `limit` | `number` | Limite pedido |
 | `results[].id` | `string` | ID do lançamento |
 | `results[].name` | `string` | Nome da missão |
-| `results[].flightNumber` | `number` | Contagem aproximada de tentativas da agência |
-| `results[].dateUtc` | `string` | Data/hora UTC (NET) |
-| `results[].dateUnix` | `number` | Timestamp Unix |
-| `results[].success` | `boolean \| null` | Sucesso (`null` se ainda não ocorreu) |
+| `results[].success` | `boolean \| null` | Sucesso |
 | `results[].upcoming` | `boolean` | Ainda não ocorreu |
-| `results[].status` | `string` | Abreviação do status (`Success`, `Failure`, `Go`...) |
-| `results[].details` | `string \| null` | Descrição da missão |
-| `results[].rocket` | `string` | Foguetes / configuração |
+| `results[].status` | `string` | Status (`Success`, `Failure`, `Go`...) |
+| `results[].details` | `string \| null` | Descrição |
+| `results[].rocket` | `string` | Foguete |
 | `results[].launchpad` | `string` | Plataforma |
-| `results[].links` | `object` | Imagens e links úteis |
 
 ---
 

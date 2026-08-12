@@ -36,9 +36,6 @@ export class GetLaunchesUseCase {
 
     const list = await this.launchesRepository.getLaunches({
       limit: params.limit,
-      offset: params.offset,
-      upcoming: params.upcoming,
-      status: params.status,
     });
 
     if (params.locale === 'en') return list;

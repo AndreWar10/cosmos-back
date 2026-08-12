@@ -51,20 +51,11 @@ export class CosmosController {
   launches = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const mode = (req.query.mode as 'list' | 'latest' | 'next') ?? 'list';
-      const upcoming = req.query.upcoming as boolean | undefined;
-      const status = req.query.status as
-        | 'success'
-        | 'failure'
-        | 'partial_failure'
-        | undefined;
 
       const data = await this.getLaunches.execute({
         locale: req.locale,
         mode,
         limit: Number(req.query.limit),
-        offset: Number(req.query.offset),
-        upcoming,
-        status,
       });
 
       res.json({
