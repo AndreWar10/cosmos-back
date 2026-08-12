@@ -115,5 +115,6 @@ export const CACHE_TTL = {
   neo: 10 * 60_000,
   news: 5 * 60_000,
   launches: 10 * 60_000,
+  solarSystem: 60 * 60_000,
   translation: 60 * 60_000,
 } as const;

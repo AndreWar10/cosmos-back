@@ -25,5 +25,7 @@ export const externalApis = {
   spaceflightNews: 'https://api.spaceflightnewsapi.net/v4/articles/',
   // api.spacexdata.com was archived (down). SpaceX launches via Launch Library 2.
   launchLibrary: 'https://ll.thespacedevs.com/2.2.0/launch',
+  solarSystem:
+    'https://63ee56ee5e9f1583bdc10f2c.mockapi.io/api/v1/systemSolar',
   myMemoryTranslate: 'https://api.mymemory.translated.net/get',
 } as const;

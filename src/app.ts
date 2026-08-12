@@ -34,6 +34,7 @@ export function createApp() {
         news: 'GET /api/news | GET /api/pt/news',
         launches: 'GET /api/launches | GET /api/pt/launches',
         neo: 'GET /api/neo | GET /api/pt/neo',
+        solarSystem: 'GET /api/solar-system | GET /api/pt/solar-system',
       },
     });
   });

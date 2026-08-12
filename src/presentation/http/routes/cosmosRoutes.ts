@@ -21,6 +21,7 @@ function createLocaleRouter(controller: CosmosController): Router {
     controller.launches,
   );
   router.get('/neo', validateQuery(neoQuerySchema), controller.neo);
+  router.get('/solar-system', controller.solarSystem);
 
   return router;
 }

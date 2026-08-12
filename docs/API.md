@@ -32,6 +32,8 @@ Envelope padrão das rotas `/api/*`:
 | `GET` | `/api/pt/launches` | Lançamentos traduzidos (PT) |
 | `GET` | `/api/neo` | Asteroides próximos (NEO) |
 | `GET` | `/api/pt/neo` | NEO (mesmo payload; dados de catálogo) |
+| `GET` | `/api/solar-system` | Sistema solar (traduzido EN; fonte é PT) |
+| `GET` | `/api/pt/solar-system` | Sistema solar em português (original) |
 
 ---
 
@@ -349,6 +351,60 @@ GET /api/pt/neo?start_date=2026-08-12
 
 ---
 
+## `GET /api/solar-system` · `GET /api/pt/solar-system`
+
+Corpos do sistema solar (MockAPI).  
+A fonte já vem em **português**.
+
+| Path | Comportamento |
+|------|----------------|
+| `/api/pt/solar-system` | Retorna o original (PT) |
+| `/api/solar-system` | Traduz PT → EN |
+
+### Exemplos
+
+```http
+GET /api/pt/solar-system
+GET /api/solar-system
+```
+
+### Resposta `200`
+
+```json
+{
+  "locale": "pt",
+  "data": [
+    {
+      "id": "0",
+      "name": "Sol",
+      "type": "Estrela",
+      "resume": "...",
+      "introduction": "",
+      "images": {
+        "svg": "https://...",
+        "png": "https://..."
+      },
+      "searchTags": ["planeta", "sol", "estrela central"],
+      "features": {
+        "orbitalPeriod": ["0 dias", "0 anos"],
+        "orbitalSpeed": "0 km/h",
+        "rotationDuration": "25dias 9h07min",
+        "radius": "696.340 km",
+        "diameter": "1.392.700 km",
+        "sunDistance": "0 km",
+        "oneWayLightToTheSun": "",
+        "satellites": { "number": 0, "names": [] },
+        "temperature": "5.505°C",
+        "gravity": "274 m/s²"
+      },
+      "geography": ""
+    }
+  ]
+}
+```
+
+---
+
 ## Erros
 
 Formato:
@@ -378,6 +434,7 @@ Formato:
 | Home | `GET /api/apod` + `GET /api/neo` (ou `/api/pt/...`) |
 | News | `GET /api/news?limit=20` |
 | Launches | `GET /api/launches?mode=next` e/ou `?upcoming=true` |
+| Solar System | `GET /api/pt/solar-system` (PT) ou `GET /api/solar-system` (EN) |
 
 ---
 
@@ -389,3 +446,4 @@ Formato:
 | `/api/neo` | [NASA NeoWs Feed](https://api.nasa.gov/neo/rest/v1/feed) |
 | `/api/news` | [Spaceflight News v4](https://api.spaceflightnewsapi.net/v4/articles/) |
 | `/api/launches` | [Launch Library 2](https://ll.thespacedevs.com/2.2.0/launch) (filtro SpaceX) |
+| `/api/solar-system` | [MockAPI systemSolar](https://63ee56ee5e9f1583bdc10f2c.mockapi.io/api/v1/systemSolar) |

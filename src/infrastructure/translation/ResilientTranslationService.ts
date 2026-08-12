@@ -11,14 +11,14 @@ interface MyMemoryResponse {
   };
 }
 
-/** Unofficial but widely used Google endpoint — works better from cloud IPs. */
 async function translateWithGtx(
   text: string,
   target: Locale,
+  source: Locale,
 ): Promise<string> {
   const url = new URL('https://translate.googleapis.com/translate_a/single');
   url.searchParams.set('client', 'gtx');
-  url.searchParams.set('sl', 'en');
+  url.searchParams.set('sl', source);
   url.searchParams.set('tl', target);
   url.searchParams.set('dt', 't');
   url.searchParams.set('q', text);
@@ -33,7 +33,6 @@ async function translateWithGtx(
   }
 
   const payload = (await response.json()) as unknown;
-  // Shape: [[["translated","original",...],...],...]
   if (!Array.isArray(payload) || !Array.isArray(payload[0])) {
     throw new Error('Unexpected GTX payload');
   }
@@ -50,9 +49,10 @@ async function translateWithGtx(
 async function translateWithGooglePackage(
   text: string,
   target: Locale,
+  source: Locale,
 ): Promise<string> {
   const result = await googleTranslate(text, {
-    from: 'en',
+    from: source,
     to: target,
     forceBatch: false,
   });
@@ -71,13 +71,14 @@ async function translateWithGooglePackage(
 async function translateWithMyMemory(
   text: string,
   target: Locale,
+  source: Locale,
 ): Promise<string> {
   const response = await httpGet<MyMemoryResponse>(
     externalApis.myMemoryTranslate,
     {
       query: {
         q: text.slice(0, 450),
-        langpair: `en|${target}`,
+        langpair: `${source}|${target}`,
       },
       timeoutMs: 12_000,
     },
@@ -93,7 +94,7 @@ async function translateWithMyMemory(
 
 type Provider = {
   name: string;
-  run: (text: string, target: Locale) => Promise<string>;
+  run: (text: string, target: Locale, source: Locale) => Promise<string>;
 };
 
 const providers: Provider[] = [
@@ -103,26 +104,27 @@ const providers: Provider[] = [
 ];
 
 /**
- * Never cache failed translations — that pinned English under /pt for the TTL.
- * Cache key is versioned (v2) to invalidate previously cached English fallbacks.
+ * Never cache failed translations — that pinned wrong-language text for the TTL.
+ * Cache key is versioned (v3) and includes source→target.
  */
 export class ResilientTranslationService implements TranslationService {
-  async translate(text: string, target: Locale): Promise<string> {
-    if (!text?.trim() || target === 'en') return text;
+  async translate(
+    text: string,
+    target: Locale,
+    source: Locale = 'en',
+  ): Promise<string> {
+    if (!text?.trim() || target === source) return text;
 
     const normalized = text.trim();
-    const cacheKey = `tr:v2:${target}:${normalized}`;
+    const cacheKey = `tr:v3:${source}:${target}:${normalized}`;
 
     const cached = upstreamCache.get<string>(cacheKey);
     if (cached !== undefined) return cached;
 
     for (const provider of providers) {
       try {
-        const translated = await provider.run(normalized, target);
-        if (!translated || translated === normalized) {
-          // Might be a proper noun — still accept, but try next if empty.
-          if (!translated) continue;
-        }
+        const translated = await provider.run(normalized, target, source);
+        if (!translated) continue;
         upstreamCache.set(cacheKey, translated, CACHE_TTL.translation);
         return translated;
       } catch (error) {
@@ -133,12 +135,17 @@ export class ResilientTranslationService implements TranslationService {
       }
     }
 
-    // Do NOT cache failures — next request can retry providers.
     return normalized;
   }
 
-  async translateMany(texts: string[], target: Locale): Promise<string[]> {
-    if (target === 'en') return texts;
-    return Promise.all(texts.map((text) => this.translate(text, target)));
+  async translateMany(
+    texts: string[],
+    target: Locale,
+    source: Locale = 'en',
+  ): Promise<string[]> {
+    if (target === source) return texts;
+    return Promise.all(
+      texts.map((text) => this.translate(text, target, source)),
+    );
   }
 }

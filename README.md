@@ -31,6 +31,7 @@ API em `http://localhost:3333`.
 | Health | `GET /health` | — |
 | Home — imagem do dia | `GET /api/apod` | `GET /api/pt/apod` |
 | Home — asteroides | `GET /api/neo` | `GET /api/pt/neo` |
+| Solar System | `GET /api/solar-system` (EN) | `GET /api/pt/solar-system` (PT original) |
 | News | `GET /api/news` | `GET /api/pt/news` |
 | Launches | `GET /api/launches` | `GET /api/pt/launches` |
 

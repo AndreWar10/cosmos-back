@@ -2,10 +2,12 @@ import { GetApodUseCase } from '../application/use-cases/GetApodUseCase.js';
 import { GetLaunchesUseCase } from '../application/use-cases/GetLaunchesUseCase.js';
 import { GetNeoFeedUseCase } from '../application/use-cases/GetNeoFeedUseCase.js';
 import { GetNewsUseCase } from '../application/use-cases/GetNewsUseCase.js';
+import { GetSolarSystemUseCase } from '../application/use-cases/GetSolarSystemUseCase.js';
 import { NasaApodRepository } from '../infrastructure/nasa/NasaApodRepository.js';
 import { NasaNeoRepository } from '../infrastructure/nasa/NasaNeoRepository.js';
 import { SpaceflightNewsRepository } from '../infrastructure/spaceflight/SpaceflightNewsRepository.js';
 import { SpaceXLaunchesRepository } from '../infrastructure/spacex/SpaceXLaunchesRepository.js';
+import { MockApiSolarSystemRepository } from '../infrastructure/solarsystem/MockApiSolarSystemRepository.js';
 import { ResilientTranslationService } from '../infrastructure/translation/ResilientTranslationService.js';
 import { CosmosController } from '../presentation/http/controllers/CosmosController.js';
 
@@ -16,6 +18,7 @@ export function createContainer() {
   const newsRepository = new SpaceflightNewsRepository();
   const launchesRepository = new SpaceXLaunchesRepository();
   const neoRepository = new NasaNeoRepository();
+  const solarSystemRepository = new MockApiSolarSystemRepository();
 
   const getApod = new GetApodUseCase(apodRepository, translationService);
   const getNews = new GetNewsUseCase(newsRepository, translationService);
@@ -24,12 +27,17 @@ export function createContainer() {
     translationService,
   );
   const getNeoFeed = new GetNeoFeedUseCase(neoRepository);
+  const getSolarSystem = new GetSolarSystemUseCase(
+    solarSystemRepository,
+    translationService,
+  );
 
   const cosmosController = new CosmosController(
     getApod,
     getNews,
     getLaunches,
     getNeoFeed,
+    getSolarSystem,
   );
 
   return {

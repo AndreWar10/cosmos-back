@@ -3,6 +3,7 @@ import type { GetApodUseCase } from '../../../application/use-cases/GetApodUseCa
 import type { GetNewsUseCase } from '../../../application/use-cases/GetNewsUseCase.js';
 import type { GetLaunchesUseCase } from '../../../application/use-cases/GetLaunchesUseCase.js';
 import type { GetNeoFeedUseCase } from '../../../application/use-cases/GetNeoFeedUseCase.js';
+import type { GetSolarSystemUseCase } from '../../../application/use-cases/GetSolarSystemUseCase.js';
 
 export class CosmosController {
   constructor(
@@ -10,6 +11,7 @@ export class CosmosController {
     private readonly getNews: GetNewsUseCase,
     private readonly getLaunches: GetLaunchesUseCase,
     private readonly getNeoFeed: GetNeoFeedUseCase,
+    private readonly getSolarSystem: GetSolarSystemUseCase,
   ) {}
 
   apod = async (req: Request, res: Response, next: NextFunction) => {
@@ -80,6 +82,21 @@ export class CosmosController {
         locale: req.locale,
         startDate: req.query.start_date as string | undefined,
         endDate: req.query.end_date as string | undefined,
+      });
+
+      res.json({
+        locale: req.locale,
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  solarSystem = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = await this.getSolarSystem.execute({
+        locale: req.locale,
       });
 
       res.json({
