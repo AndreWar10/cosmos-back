@@ -35,7 +35,7 @@ export class NasaApodRepository implements ApodRepository {
   async getApod(params: GetApodParams = {}): Promise<Apod> {
     const cacheKey = `apod:${params.date ?? 'today'}`;
 
-    return upstreamCache.getOrSet(
+    return upstreamCache.getStaleWhileRevalidate(
       cacheKey,
       async () => {
       const raw = await httpGet<NasaApodResponse>(externalApis.nasaApod, {

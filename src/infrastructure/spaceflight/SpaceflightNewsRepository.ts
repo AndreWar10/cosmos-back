@@ -53,7 +53,7 @@ export class SpaceflightNewsRepository implements NewsRepository {
     const search = params.search?.trim() || '';
     const cacheKey = `news:limit=${limit}:offset=${offset}:search=${search}`;
 
-    return upstreamCache.getOrSet(
+    return upstreamCache.getStaleWhileRevalidate(
       cacheKey,
       async () => {
         const raw = await httpGet<SpaceflightArticlesResponse>(

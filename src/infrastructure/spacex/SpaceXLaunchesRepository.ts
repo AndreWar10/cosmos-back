@@ -123,7 +123,7 @@ async function fetchSpaceXLaunches(options: {
     options.status ?? 'any-status',
   ].join(':');
 
-  return upstreamCache.getOrSet(
+  return upstreamCache.getStaleWhileRevalidate(
     cacheKey,
     async () => {
       const query: Record<string, string | number | boolean | undefined> = {

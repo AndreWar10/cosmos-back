@@ -77,7 +77,7 @@ export class NasaNeoRepository implements NeoRepository {
     const endDate = params.endDate ?? startDate;
     const cacheKey = `neo:${startDate}:${endDate}`;
 
-    return upstreamCache.getOrSet(
+    return upstreamCache.getStaleWhileRevalidate(
       cacheKey,
       async () => {
       const raw = await httpGet<NasaNeoFeedResponse>(externalApis.nasaNeo, {

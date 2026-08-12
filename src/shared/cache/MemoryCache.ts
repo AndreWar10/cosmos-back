@@ -3,8 +3,11 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
+type Factory<T> = () => Promise<T>;
+
 export class MemoryCache {
   private readonly store = new Map<string, CacheEntry<unknown>>();
+  private readonly inflight = new Map<string, Promise<unknown>>();
 
   constructor(private readonly defaultTtlMs: number) {}
 
@@ -15,7 +18,6 @@ export class MemoryCache {
     return entry.value as T;
   }
 
-  /** Returns value even if expired (for stale-on-error fallback). */
   getStale<T>(key: string): T | undefined {
     const entry = this.store.get(key);
     if (!entry) return undefined;
@@ -29,18 +31,20 @@ export class MemoryCache {
     });
   }
 
+  /**
+   * Classic get-or-set: waits for fresh data on miss.
+   * On upstream failure, serves stale if available.
+   */
   async getOrSet<T>(
     key: string,
-    factory: () => Promise<T>,
+    factory: Factory<T>,
     ttlMs = this.defaultTtlMs,
   ): Promise<T> {
     const cached = this.get<T>(key);
     if (cached !== undefined) return cached;
 
     try {
-      const value = await factory();
-      this.set(key, value, ttlMs);
-      return value;
+      return await this.refresh(key, factory, ttlMs);
     } catch (error) {
       const stale = this.getStale<T>(key);
       if (stale !== undefined) {
@@ -51,6 +55,55 @@ export class MemoryCache {
       }
       throw error;
     }
+  }
+
+  /**
+   * Stale-while-revalidate:
+   * - If any cached value exists → return immediately
+   * - If expired (or missing) → refresh in background (or await on cold miss)
+   */
+  async getStaleWhileRevalidate<T>(
+    key: string,
+    factory: Factory<T>,
+    ttlMs = this.defaultTtlMs,
+  ): Promise<T> {
+    const stale = this.getStale<T>(key);
+    const fresh = this.get<T>(key);
+
+    if (stale !== undefined) {
+      if (fresh === undefined && !this.inflight.has(key)) {
+        void this.refresh(key, factory, ttlMs).catch((error) => {
+          console.warn(
+            `[cache] background refresh failed for "${key}":`,
+            error instanceof Error ? error.message : error,
+          );
+        });
+      }
+      return stale;
+    }
+
+    return this.refresh(key, factory, ttlMs);
+  }
+
+  private refresh<T>(
+    key: string,
+    factory: Factory<T>,
+    ttlMs: number,
+  ): Promise<T> {
+    const existing = this.inflight.get(key) as Promise<T> | undefined;
+    if (existing) return existing;
+
+    const promise = factory()
+      .then((value) => {
+        this.set(key, value, ttlMs);
+        return value;
+      })
+      .finally(() => {
+        this.inflight.delete(key);
+      });
+
+    this.inflight.set(key, promise);
+    return promise;
   }
 }
 
