@@ -1,5 +1,5 @@
 import { translate as googleTranslate } from 'google-translate-api-x';
-import { externalApis } from '../../config/env.js';
+import { env, externalApis } from '../../config/env.js';
 import type { TranslationService } from '../../domain/services/TranslationService.js';
 import type { Locale } from '../../shared/types/locale.js';
 import { httpGet } from '../../shared/http/httpClient.js';
@@ -56,8 +56,8 @@ async function translateWithMyMemory(
 }
 
 /**
- * Tries Google first (works well locally). On cloud hosts Google often blocks
- * datacenter IPs, so we fall back to MyMemory.
+ * Google is often blocked on cloud IPs; MyMemory works better there.
+ * Never cache failed translations (that would pin English under /pt for the TTL).
  */
 export class ResilientTranslationService implements TranslationService {
   async translate(text: string, target: Locale): Promise<string> {
@@ -66,32 +66,29 @@ export class ResilientTranslationService implements TranslationService {
     const normalized = text.trim();
     const cacheKey = `tr:${target}:${normalized}`;
 
-    return upstreamCache.getOrSet(
-      cacheKey,
-      async () => {
-        try {
-          return await translateWithGoogle(normalized, target);
-        } catch (googleError) {
-          console.warn(
-            '[translation] Google failed, trying MyMemory:',
-            googleError instanceof Error ? googleError.message : googleError,
-          );
+    const cached = upstreamCache.get<string>(cacheKey);
+    if (cached !== undefined) return cached;
 
-          try {
-            return await translateWithMyMemory(normalized, target);
-          } catch (myMemoryError) {
-            console.warn(
-              '[translation] MyMemory failed, returning original:',
-              myMemoryError instanceof Error
-                ? myMemoryError.message
-                : myMemoryError,
-            );
-            return normalized;
-          }
-        }
-      },
-      CACHE_TTL.translation,
-    );
+    const providers =
+      env.NODE_ENV === 'production'
+        ? [translateWithMyMemory, translateWithGoogle]
+        : [translateWithGoogle, translateWithMyMemory];
+
+    for (const provider of providers) {
+      try {
+        const translated = await provider(normalized, target);
+        upstreamCache.set(cacheKey, translated, CACHE_TTL.translation);
+        return translated;
+      } catch (error) {
+        console.warn(
+          `[translation] ${provider.name} failed:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    // Do NOT cache failures — next request can retry providers.
+    return normalized;
   }
 
   async translateMany(texts: string[], target: Locale): Promise<string[]> {
