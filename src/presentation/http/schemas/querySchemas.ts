@@ -15,12 +15,14 @@ export const newsQuerySchema = z.object({
 
 export const launchesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  offset: z.coerce.number().int().min(0).optional().default(0),
   upcoming: z
     .enum(['true', 'false'])
     .optional()
     .transform((value) =>
       value === undefined ? undefined : value === 'true',
     ),
+  status: z.enum(['success', 'failure', 'partial_failure']).optional(),
   mode: z.enum(['list', 'latest', 'next']).optional().default('list'),
 });
 

@@ -1,3 +1,10 @@
+export interface LaunchList {
+  count: number;
+  limit: number;
+  offset: number;
+  results: Launch[];
+}
+
 export interface LaunchLinks {
   patch: {
     small: string | null;
@@ -30,6 +37,7 @@ export interface Launch {
   details: string | null;
   rocket: string;
   launchpad: string;
+  status: string;
   links: LaunchLinks;
   cores: LaunchCore[];
 }

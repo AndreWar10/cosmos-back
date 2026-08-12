@@ -198,14 +198,21 @@ Em `/pt`, traduz `name` e `details`.
 | Param | Tipo | Obrigatório | Default | Descrição |
 |-------|------|-------------|---------|-----------|
 | `mode` | `list` \| `latest` \| `next` | não | `list` | Tipo de consulta |
-| `limit` | `number` (1–100) | não | `20` | Qtd. (só em `mode=list`) |
-| `upcoming` | `true` \| `false` | não | — | Filtra futuros/passados (só em `mode=list`) |
+| `limit` | `number` (1–100) | não | `20` | Qtd. por página (`mode=list`) |
+| `offset` | `number` (≥ 0) | não | `0` | Paginação (`mode=list`) |
+| `upcoming` | `true` \| `false` | não | — | Futuros / passados (`mode=list`) |
+| `status` | `success` \| `failure` \| `partial_failure` | não | — | Resultado do lançamento (`mode=list`) |
+
+`status` mapeia a API da Launch Library:
+- `success` → status id `3`
+- `failure` → status id `4`
+- `partial_failure` → status id `7`
 
 ### Modos
 
 | `mode` | Retorno |
 |--------|---------|
-| `list` | Array de lançamentos |
+| `list` | Lista paginada `{ count, limit, offset, results }` |
 | `latest` | Último lançamento (objeto) |
 | `next` | Próximo lançamento futuro (objeto) |
 
@@ -213,9 +220,10 @@ Em `/pt`, traduz `name` e `details`.
 
 ```http
 GET /api/launches
-GET /api/launches?limit=10
+GET /api/launches?limit=10&offset=20
 GET /api/launches?upcoming=true
-GET /api/launches?upcoming=false&limit=5
+GET /api/launches?upcoming=false&status=success&limit=20
+GET /api/launches?status=failure&offset=0
 GET /api/launches?mode=next
 GET /api/launches?mode=latest
 GET /api/pt/launches?mode=next
@@ -226,46 +234,55 @@ GET /api/pt/launches?mode=next
 ```json
 {
   "locale": "en",
-  "data": [
-    {
-      "id": "36ab6924-...",
-      "name": "Falcon 9 Block 5 | Starlink Group 10-19",
-      "flightNumber": 715,
-      "dateUtc": "2026-08-15T21:52:00Z",
-      "dateUnix": 1786825920,
-      "success": null,
-      "upcoming": true,
-      "details": "...",
-      "rocket": "Falcon 9 Block 5",
-      "launchpad": "Space Launch Complex 40",
-      "links": {
-        "patch": { "small": "...", "large": "..." },
-        "webcast": null,
-        "wikipedia": "...",
-        "article": "...",
-        "flickr": { "original": [] }
-      },
-      "cores": []
-    }
-  ]
+  "data": {
+    "count": 715,
+    "limit": 20,
+    "offset": 0,
+    "results": [
+      {
+        "id": "36ab6924-...",
+        "name": "Falcon 9 Block 5 | Starlink Group 10-19",
+        "flightNumber": 715,
+        "dateUtc": "2026-08-15T21:52:00Z",
+        "dateUnix": 1786825920,
+        "success": true,
+        "upcoming": false,
+        "status": "Success",
+        "details": "...",
+        "rocket": "Falcon 9 Block 5",
+        "launchpad": "Space Launch Complex 40",
+        "links": {
+          "patch": { "small": "...", "large": "..." },
+          "webcast": null,
+          "wikipedia": "...",
+          "article": "...",
+          "flickr": { "original": [] }
+        },
+        "cores": []
+      }
+    ]
+  }
 }
 ```
 
-Com `mode=next` ou `mode=latest`, `data` é um **objeto** (não array).
+Com `mode=next` ou `mode=latest`, `data` é um **objeto** (não lista paginada).
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| `id` | `string` | ID do lançamento |
-| `name` | `string` | Nome da missão |
-| `flightNumber` | `number` | Contagem aproximada de tentativas da agência |
-| `dateUtc` | `string` | Data/hora UTC (NET) |
-| `dateUnix` | `number` | Timestamp Unix |
-| `success` | `boolean \| null` | Sucesso (null se ainda não ocorreu) |
-| `upcoming` | `boolean` | Ainda não ocorreu |
-| `details` | `string \| null` | Descrição da missão |
-| `rocket` | `string` | Foguetes / configuração |
-| `launchpad` | `string` | Plataforma |
-| `links` | `object` | Imagens e links úteis |
+| `count` | `number` | Total de itens (paginação) |
+| `limit` / `offset` | `number` | Página atual |
+| `results[].id` | `string` | ID do lançamento |
+| `results[].name` | `string` | Nome da missão |
+| `results[].flightNumber` | `number` | Contagem aproximada de tentativas da agência |
+| `results[].dateUtc` | `string` | Data/hora UTC (NET) |
+| `results[].dateUnix` | `number` | Timestamp Unix |
+| `results[].success` | `boolean \| null` | Sucesso (`null` se ainda não ocorreu) |
+| `results[].upcoming` | `boolean` | Ainda não ocorreu |
+| `results[].status` | `string` | Abreviação do status (`Success`, `Failure`, `Go`...) |
+| `results[].details` | `string \| null` | Descrição da missão |
+| `results[].rocket` | `string` | Foguetes / configuração |
+| `results[].launchpad` | `string` | Plataforma |
+| `results[].links` | `object` | Imagens e links úteis |
 
 ---
 

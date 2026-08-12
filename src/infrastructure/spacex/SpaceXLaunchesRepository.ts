@@ -1,7 +1,8 @@
 import { externalApis } from '../../config/env.js';
-import type { Launch } from '../../domain/entities/Launch.js';
+import type { Launch, LaunchList } from '../../domain/entities/Launch.js';
 import type {
   GetLaunchesParams,
+  LaunchStatusFilter,
   LaunchesRepository,
 } from '../../domain/repositories/LaunchesRepository.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
@@ -13,6 +14,12 @@ import { httpGet } from '../../shared/http/httpClient.js';
  * launch service provider id 121 (SpaceX).
  */
 const SPACEX_PROVIDER_ID = 121;
+
+const STATUS_IDS: Record<LaunchStatusFilter, string> = {
+  success: '3',
+  failure: '4',
+  partial_failure: '7',
+};
 
 interface LaunchLibraryLaunch {
   id: string;
@@ -50,18 +57,17 @@ interface LaunchLibraryLaunch {
 interface LaunchLibraryResponse {
   count: number;
   next: string | null;
+  previous: string | null;
   results: LaunchLibraryLaunch[];
 }
 
 function isSuccessful(statusId: number): boolean | null {
-  // 3 = Success, 4 = Failure, 7 = Partial Failure
   if (statusId === 3) return true;
   if (statusId === 4 || statusId === 7) return false;
   return null;
 }
 
 function isUpcoming(statusId: number, net: string): boolean {
-  // 1 Go, 2 TBD, 5 Hold, 6 In Flight, 8 TBC
   const upcomingStatuses = new Set([1, 2, 5, 6, 8]);
   if (upcomingStatuses.has(statusId)) return true;
   return new Date(net).getTime() > Date.now();
@@ -81,6 +87,7 @@ function mapLaunch(raw: LaunchLibraryLaunch): Launch {
     details: raw.mission?.description ?? null,
     rocket: raw.rocket.configuration.full_name,
     launchpad: raw.pad.name,
+    status: raw.status.abbrev,
     links: {
       patch: {
         small: raw.image,
@@ -98,75 +105,89 @@ function mapLaunch(raw: LaunchLibraryLaunch): Launch {
 }
 
 async function fetchSpaceXLaunches(options: {
-  path: 'upcoming' | 'previous';
+  path?: 'upcoming' | 'previous';
   limit: number;
+  offset?: number;
   onlyFuture?: boolean;
-}): Promise<Launch[]> {
+  status?: LaunchStatusFilter;
+}): Promise<LaunchList> {
+  const limit = options.limit;
+  const offset = options.offset ?? 0;
+
   const query: Record<string, string | number | boolean | undefined> = {
     lsp__id: SPACEX_PROVIDER_ID,
-    limit: options.onlyFuture ? Math.max(options.limit * 3, 10) : options.limit,
+    limit,
+    offset,
     mode: 'detailed',
   };
+
+  if (options.status) {
+    query.status__ids = STATUS_IDS[options.status];
+  }
 
   if (options.onlyFuture) {
     query.net__gte = new Date().toISOString();
   }
 
-  const raw = await httpGet<LaunchLibraryResponse>(
-    `${externalApis.launchLibrary}/${options.path}/`,
-    { query },
-  );
+  const basePath = options.path
+    ? `${externalApis.launchLibrary}/${options.path}/`
+    : `${externalApis.launchLibrary}/`;
 
-  let launches = raw.results.map(mapLaunch);
+  const raw = await httpGet<LaunchLibraryResponse>(basePath, { query });
 
-  if (options.onlyFuture) {
-    const now = Date.now();
-    launches = launches
-      .filter((launch) => launch.dateUnix * 1000 >= now)
-      .slice(0, options.limit);
-  }
-
-  return launches;
+  return {
+    count: raw.count,
+    limit,
+    offset,
+    results: raw.results.map(mapLaunch),
+  };
 }
 
 export class SpaceXLaunchesRepository implements LaunchesRepository {
-  async getLaunches(params: GetLaunchesParams = {}): Promise<Launch[]> {
+  async getLaunches(params: GetLaunchesParams = {}): Promise<LaunchList> {
     const limit = params.limit ?? 20;
+    const offset = params.offset ?? 0;
 
     if (params.upcoming === true) {
       return fetchSpaceXLaunches({
         path: 'upcoming',
         limit,
+        offset,
         onlyFuture: true,
+        status: params.status,
       });
     }
 
     if (params.upcoming === false) {
-      return fetchSpaceXLaunches({ path: 'previous', limit });
+      return fetchSpaceXLaunches({
+        path: 'previous',
+        limit,
+        offset,
+        status: params.status,
+      });
     }
 
-    const [upcoming, previous] = await Promise.all([
-      fetchSpaceXLaunches({ path: 'upcoming', limit, onlyFuture: true }),
-      fetchSpaceXLaunches({ path: 'previous', limit }),
-    ]);
-
-    return [...upcoming, ...previous]
-      .sort((a, b) => b.dateUnix - a.dateUnix)
-      .slice(0, limit);
+    return fetchSpaceXLaunches({
+      limit,
+      offset,
+      status: params.status,
+    });
   }
 
   async getLatestLaunch(): Promise<Launch> {
-    const [latest] = await fetchSpaceXLaunches({ path: 'previous', limit: 1 });
+    const list = await fetchSpaceXLaunches({ path: 'previous', limit: 1 });
+    const latest = list.results[0];
     if (!latest) throw new NotFoundError('Latest SpaceX launch not found');
     return latest;
   }
 
   async getNextLaunch(): Promise<Launch> {
-    const [next] = await fetchSpaceXLaunches({
+    const list = await fetchSpaceXLaunches({
       path: 'upcoming',
       limit: 1,
       onlyFuture: true,
     });
+    const next = list.results[0];
     if (!next) throw new NotFoundError('Next SpaceX launch not found');
     return next;
   }
