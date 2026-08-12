@@ -6,11 +6,11 @@ import { NasaApodRepository } from '../infrastructure/nasa/NasaApodRepository.js
 import { NasaNeoRepository } from '../infrastructure/nasa/NasaNeoRepository.js';
 import { SpaceflightNewsRepository } from '../infrastructure/spaceflight/SpaceflightNewsRepository.js';
 import { SpaceXLaunchesRepository } from '../infrastructure/spacex/SpaceXLaunchesRepository.js';
-import { GoogleTranslationService } from '../infrastructure/translation/GoogleTranslationService.js';
+import { ResilientTranslationService } from '../infrastructure/translation/ResilientTranslationService.js';
 import { CosmosController } from '../presentation/http/controllers/CosmosController.js';
 
 export function createContainer() {
-  const translationService = new GoogleTranslationService();
+  const translationService = new ResilientTranslationService();
 
   const apodRepository = new NasaApodRepository();
   const newsRepository = new SpaceflightNewsRepository();

@@ -23,20 +23,20 @@ export class GetNewsUseCase {
 
     if (params.locale === 'en') return articles;
 
-    const results = [];
+    const results = await Promise.all(
+      articles.results.map(async (article) => {
+        const [title, summary] = await this.translationService.translateMany(
+          [article.title, article.summary],
+          params.locale,
+        );
 
-    for (const article of articles.results) {
-      const [title, summary] = await this.translationService.translateMany(
-        [article.title, article.summary],
-        params.locale,
-      );
-
-      results.push({
-        ...article,
-        title,
-        summary,
-      });
-    }
+        return {
+          ...article,
+          title,
+          summary,
+        };
+      }),
+    );
 
     return {
       ...articles,
