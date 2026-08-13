@@ -1,6 +1,6 @@
 import { createApp } from './app.js';
 import { env } from './config/env.js';
-import { startLaunchesRefreshLoop, warmupCache } from './main/warmup.js';
+import { startCacheRefreshLoop, warmupCache } from './main/warmup.js';
 
 const app = createApp();
 
@@ -8,5 +8,5 @@ app.listen(env.PORT, '0.0.0.0', () => {
   console.log(`Cosmos API running on http://localhost:${env.PORT}`);
   console.log(`Environment: ${env.NODE_ENV}`);
 
-  void warmupCache().then(() => startLaunchesRefreshLoop());
+  void warmupCache().then(() => startCacheRefreshLoop());
 });

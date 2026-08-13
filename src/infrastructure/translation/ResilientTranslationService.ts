@@ -4,6 +4,7 @@ import type { TranslationService } from '../../domain/services/TranslationServic
 import type { Locale } from '../../shared/types/locale.js';
 import { httpGet } from '../../shared/http/httpClient.js';
 import { CACHE_TTL, upstreamCache } from '../../shared/cache/MemoryCache.js';
+import { mapPool } from '../../shared/async/mapPool.js';
 
 interface MyMemoryResponse {
   responseData?: {
@@ -144,8 +145,6 @@ export class ResilientTranslationService implements TranslationService {
     source: Locale = 'en',
   ): Promise<string[]> {
     if (target === source) return texts;
-    return Promise.all(
-      texts.map((text) => this.translate(text, target, source)),
-    );
+    return mapPool(texts, 5, (text) => this.translate(text, target, source));
   }
 }

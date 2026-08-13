@@ -130,6 +130,8 @@ GET /api/pt/apod?date=2026-08-01
 Feed de notícias (Spaceflight News API v4).  
 Em `/pt`, traduz `title` e `summary` de cada artigo.
 
+Respostas localizadas (EN/PT) ficam em cache (~15 min, stale-while-revalidate). A próxima página é pré-carregada em background após cada request.
+
 ### Query params
 
 | Param | Tipo | Obrigatório | Default | Descrição |
@@ -196,6 +198,8 @@ Lançamentos SpaceX (via Launch Library 2).
 Em `/pt`, traduz `name` e `details`.
 
 Paginação simples (`limit` + `offset`). Sem filtros de status/upcoming.
+
+Respostas localizadas ficam em cache (~30 min). A próxima página é pré-carregada em background. Refresh periódico no servidor mantém a page 0 quente.
 
 ### Query params
 
